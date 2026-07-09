@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>⛽ 加油站儲值管理系統</title>
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <span class="logo">⛽ 加油站儲值管理系統</span>
+      <a class="admin-link" href="/admin.html">後台管理 →</a>
+    </div>
+  </div>
+
+  <main class="container">
+    <section class="panel">
+      <h1>廠商即時餘額</h1>
+      <p class="subtitle">餘額低於 <strong>NT$ 20,000</strong> 將以紅色警示顯示</p>
+      <div id="vendor-list" class="vendor-grid">
+        <div class="loading">載入中...</div>
+      </div>
+    </section>
+
+    <section class="panel deduct-panel">
+      <h2>💳 廠商扣款</h2>
+      <form id="deduct-form">
+        <div class="form-row">
+          <label for="vendor-select">選擇廠商</label>
+          <select id="vendor-select" required></select>
+        </div>
+        <div class="form-row">
+          <label for="amount-input">扣款金額</label>
+          <input id="amount-input" type="number" min="1" step="1" placeholder="請輸入大於 0 的金額" required />
+        </div>
+        <button type="submit" class="btn-deduct">確認扣款</button>
+      </form>
+      <div id="message" class="message"></div>
+    </section>
+  </main>
+
+  <footer class="footer">加油站儲值管理系統 &middot; Asia/Taipei</footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

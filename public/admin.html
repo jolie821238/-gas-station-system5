@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>後台管理 - 加油站儲值管理系統</title>
+<link rel="stylesheet" href="admin.css" />
+</head>
+<body>
+
+<!-- 登入畫面 -->
+<div id="login-section" class="login-wrap">
+  <form id="login-form" class="login-box">
+    <h1>🔐 後台登入</h1>
+    <p class="hint">請輸入管理員密碼</p>
+    <input id="login-password" type="password" placeholder="密碼" autocomplete="current-password" required />
+    <button type="submit">登入</button>
+    <div id="login-message" class="login-message"></div>
+  </form>
+</div>
+
+<!-- 後台主畫面 -->
+<div id="dashboard-section" class="dashboard" style="display:none;">
+  <div class="topbar">
+    <div class="topbar-inner">
+      <span class="logo">⛽ 後台管理系統</span>
+      <div>
+        <a class="link" href="/index.html">前台首頁</a>
+        <button id="logout-btn" class="logout-btn">登出</button>
+      </div>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- 廠商管理 -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>🏭 廠商管理</h2>
+      </div>
+
+      <form id="add-vendor-form" class="inline-form">
+        <input id="new-vendor-name" type="text" placeholder="新廠商名稱" required />
+        <input id="new-vendor-balance" type="number" step="1" placeholder="初始餘額（預設 0）" />
+        <button type="submit">新增廠商</button>
+      </form>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>廠商名稱</th>
+            <th>目前餘額</th>
+            <th>操作</th>
+          </tr>
+        </thead>
+        <tbody id="vendor-table-body"></tbody>
+      </table>
+    </section>
+
+    <!-- 每日統計 -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>📅 每日統計（Asia/Taipei，各廠商扣款總額）</h2>
+        <button id="export-daily-btn" class="export-btn">匯出 Excel（每日統計）</button>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>廠商名稱</th>
+            <th>扣款總額</th>
+          </tr>
+        </thead>
+        <tbody id="daily-stats-body"></tbody>
+      </table>
+    </section>
+
+    <!-- 扣款紀錄 -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>🧾 扣款紀錄</h2>
+        <button id="export-tx-btn" class="export-btn">匯出 Excel（扣款紀錄）</button>
+      </div>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>編號</th>
+            <th>廠商名稱</th>
+            <th>金額</th>
+            <th>類型</th>
+            <th>時間（Asia/Taipei）</th>
+          </tr>
+        </thead>
+        <tbody id="tx-table-body"></tbody>
+      </table>
+    </section>
+
+  </main>
+</div>
+
+<script src="admin.js"></script>
+</body>
+</html>
