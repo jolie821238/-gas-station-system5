@@ -1,4 +1,4 @@
-const LOW_BALANCE_THRESHOLD = 20000;
+const LOW_BALANCE_THRESHOLD_DEFAULT = 20000; // 後端未回傳門檻時的備用預設值
 let vendorsData = [];
 
 function escapeHtml(str) {
@@ -32,7 +32,8 @@ function renderVendors() {
   }
 
   vendorsData.forEach((v) => {
-    const isLow = v.balance < LOW_BALANCE_THRESHOLD;
+    const threshold = Number.isFinite(Number(v.low_balance_threshold)) ? Number(v.low_balance_threshold) : LOW_BALANCE_THRESHOLD_DEFAULT;
+    const isLow = v.balance < threshold;
     const card = document.createElement('div');
     card.className = 'vendor-card' + (isLow ? ' low-balance shake' : '');
     card.innerHTML = `

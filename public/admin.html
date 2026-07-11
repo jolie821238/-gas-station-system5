@@ -42,6 +42,7 @@
       <form id="add-vendor-form" class="inline-form">
         <input id="new-vendor-name" type="text" placeholder="新廠商名稱" required />
         <input id="new-vendor-balance" type="number" step="1" placeholder="初始餘額（預設 0）" />
+        <input id="new-vendor-threshold" type="number" step="1" placeholder="警示門檻（預設 20000）" />
         <button type="submit">新增廠商</button>
       </form>
 
@@ -51,6 +52,7 @@
             <th>ID</th>
             <th>廠商名稱</th>
             <th>目前餘額</th>
+            <th>警示門檻</th>
             <th>操作</th>
           </tr>
         </thead>

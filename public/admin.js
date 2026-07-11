@@ -97,20 +97,23 @@ function renderVendorTable(vendors) {
   tbody.innerHTML = '';
 
   if (vendors.length === 0) {
-    tbody.innerHTML = '<tr class="empty-row"><td colspan="4">尚無廠商資料</td></tr>';
+    tbody.innerHTML = '<tr class="empty-row"><td colspan="5">尚無廠商資料</td></tr>';
     return;
   }
 
   vendors.forEach((v) => {
-    const isLow = v.balance < LOW_BALANCE_THRESHOLD;
+    const threshold = Number.isFinite(Number(v.low_balance_threshold)) ? Number(v.low_balance_threshold) : LOW_BALANCE_THRESHOLD;
+    const isLow = v.balance < threshold;
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${v.id}</td>
       <td>${escapeHtml(v.name)}</td>
       <td class="${isLow ? 'balance-low' : ''}">NT$ ${formatMoney(v.balance)}</td>
+      <td>NT$ ${formatMoney(threshold)}</td>
       <td>
         <div class="row-actions">
           <button class="btn-rename" data-action="rename" data-id="${v.id}" data-name="${escapeHtml(v.name)}">改名</button>
+          <button class="btn-rename" data-action="threshold" data-id="${v.id}" data-threshold="${threshold}">設定門檻</button>
           <input type="number" placeholder="+/-金額" data-adjust-input="${v.id}" step="1" />
           <button class="btn-adjust" data-action="adjust" data-id="${v.id}">調整餘額</button>
           <button class="btn-delete" data-action="delete" data-id="${v.id}">刪除</button>
@@ -141,6 +144,27 @@ document.getElementById('vendor-table-body').addEventListener('click', async (e)
     const data = await res.json();
     if (!res.ok) { showToast(data.error || '修改失敗', 'error'); return; }
     showToast('廠商名稱已更新', 'success');
+    loadVendors();
+  }
+
+  if (action === 'threshold') {
+    const currentThreshold = btn.dataset.threshold;
+    const input = prompt('請輸入這個廠商的餘額警示門檻（NT$）：', currentThreshold);
+    if (input === null) return;
+    const threshold = Number(input);
+    if (!input.trim() || !Number.isFinite(threshold) || threshold < 0) {
+      showToast('請輸入不小於 0 的有效數字', 'error');
+      return;
+    }
+
+    const res = await fetch(`/api/admin/vendors/${id}/threshold`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ low_balance_threshold: threshold })
+    });
+    const data = await res.json();
+    if (!res.ok) { showToast(data.error || '設定失敗', 'error'); return; }
+    showToast('警示門檻已更新', 'success');
     loadVendors();
   }
 
@@ -179,15 +203,17 @@ document.getElementById('add-vendor-form').addEventListener('submit', async (e) 
   e.preventDefault();
   const nameInput = document.getElementById('new-vendor-name');
   const balanceInput = document.getElementById('new-vendor-balance');
+  const thresholdInput = document.getElementById('new-vendor-threshold');
   const name = nameInput.value.trim();
   const initial_balance = balanceInput.value ? Number(balanceInput.value) : 0;
+  const low_balance_threshold = thresholdInput.value ? Number(thresholdInput.value) : undefined;
 
   if (!name) { showToast('請輸入廠商名稱', 'error'); return; }
 
   const res = await fetch('/api/admin/vendors', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ name, initial_balance })
+    body: JSON.stringify({ name, initial_balance, low_balance_threshold })
   });
   const data = await res.json();
   if (!res.ok) { showToast(data.error || '新增失敗', 'error'); return; }
@@ -195,8 +221,10 @@ document.getElementById('add-vendor-form').addEventListener('submit', async (e) 
   showToast('廠商已新增', 'success');
   nameInput.value = '';
   balanceInput.value = '';
+  thresholdInput.value = '';
   loadVendors();
 });
+
 
 // ---------------------------------------------------------------------------
 // 扣款紀錄

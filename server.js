@@ -44,8 +44,14 @@ async function initDb() {
     CREATE TABLE IF NOT EXISTS vendors (
       id      SERIAL PRIMARY KEY,
       name    TEXT UNIQUE NOT NULL,
-      balance DOUBLE PRECISION NOT NULL DEFAULT 0
+      balance DOUBLE PRECISION NOT NULL DEFAULT 0,
+      low_balance_threshold DOUBLE PRECISION NOT NULL DEFAULT 20000
     );
+  `);
+
+  // 針對已存在的舊資料庫（尚未有這個欄位）自動補上，不影響既有資料
+  await pool.query(`
+    ALTER TABLE vendors ADD COLUMN IF NOT EXISTS low_balance_threshold DOUBLE PRECISION NOT NULL DEFAULT 20000;
   `);
 
   await pool.query(`
@@ -70,7 +76,10 @@ async function initDb() {
   if (vendorRows[0].c === 0) {
     const names = ['A', 'B', 'C', 'D'];
     for (const name of names) {
-      await pool.query('INSERT INTO vendors (name, balance) VALUES ($1, $2)', [name, INITIAL_BALANCE]);
+      await pool.query(
+        'INSERT INTO vendors (name, balance, low_balance_threshold) VALUES ($1, $2, $3)',
+        [name, INITIAL_BALANCE, LOW_BALANCE_THRESHOLD]
+      );
     }
   }
 
@@ -114,7 +123,7 @@ function asyncHandler(fn) {
 // ---------------------------------------------------------------------------
 
 app.get('/api/vendors', asyncHandler(async (req, res) => {
-  const { rows } = await pool.query('SELECT id, name, balance FROM vendors ORDER BY id');
+  const { rows } = await pool.query('SELECT id, name, balance, low_balance_threshold FROM vendors ORDER BY id');
   res.json(rows);
 }));
 
@@ -192,20 +201,23 @@ app.get('/api/admin/session', (req, res) => {
 // ---------------------------------------------------------------------------
 
 app.get('/api/admin/vendors', requireAdmin, asyncHandler(async (req, res) => {
-  const { rows } = await pool.query('SELECT id, name, balance FROM vendors ORDER BY id');
+  const { rows } = await pool.query('SELECT id, name, balance, low_balance_threshold FROM vendors ORDER BY id');
   res.json(rows);
 }));
 
 app.post('/api/admin/vendors', requireAdmin, asyncHandler(async (req, res) => {
-  const { name, initial_balance } = req.body;
+  const { name, initial_balance, low_balance_threshold } = req.body;
   if (!name || !name.trim()) {
     return res.status(400).json({ error: '請輸入廠商名稱' });
   }
   const balance = Number.isFinite(Number(initial_balance)) ? Number(initial_balance) : 0;
+  const threshold = Number.isFinite(Number(low_balance_threshold)) && Number(low_balance_threshold) >= 0
+    ? Number(low_balance_threshold)
+    : LOW_BALANCE_THRESHOLD;
   try {
     const { rows } = await pool.query(
-      'INSERT INTO vendors (name, balance) VALUES ($1, $2) RETURNING id',
-      [name.trim(), balance]
+      'INSERT INTO vendors (name, balance, low_balance_threshold) VALUES ($1, $2, $3) RETURNING id',
+      [name.trim(), balance, threshold]
     );
     res.json({ success: true, id: rows[0].id });
   } catch (e) {
@@ -229,6 +241,23 @@ app.put('/api/admin/vendors/:id', requireAdmin, asyncHandler(async (req, res) =>
   } catch (e) {
     res.status(400).json({ error: '廠商名稱重複或無效' });
   }
+}));
+
+// 設定該廠商自訂的餘額警示門檻（後台專用）
+app.put('/api/admin/vendors/:id/threshold', requireAdmin, asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  const { low_balance_threshold } = req.body;
+  const threshold = Number(low_balance_threshold);
+
+  if (!Number.isFinite(threshold) || threshold < 0) {
+    return res.status(400).json({ error: '警示門檻必須是不小於 0 的數字' });
+  }
+  const { rows } = await pool.query('SELECT * FROM vendors WHERE id = $1', [id]);
+  if (!rows[0]) {
+    return res.status(404).json({ error: '廠商不存在' });
+  }
+  await pool.query('UPDATE vendors SET low_balance_threshold = $1 WHERE id = $2', [threshold, id]);
+  res.json({ success: true, low_balance_threshold: threshold });
 }));
 
 app.delete('/api/admin/vendors/:id', requireAdmin, asyncHandler(async (req, res) => {
