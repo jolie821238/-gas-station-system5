@@ -26,8 +26,35 @@
       <span class="logo">⛽ 後台管理系統</span>
       <div>
         <a class="link" href="/index.html">前台首頁</a>
+        <button id="settings-btn" class="settings-btn" title="設定">⚙️</button>
         <button id="logout-btn" class="logout-btn">登出</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 修改密碼彈出視窗 -->
+  <div id="settings-modal" class="modal-overlay" style="display:none;">
+    <div class="modal-box">
+      <h3>🔑 修改後台密碼</h3>
+      <form id="change-password-form">
+        <div class="modal-field">
+          <label>目前密碼</label>
+          <input id="current-password" type="password" required />
+        </div>
+        <div class="modal-field">
+          <label>新密碼</label>
+          <input id="new-password" type="password" required />
+        </div>
+        <div class="modal-field">
+          <label>確認新密碼</label>
+          <input id="confirm-password" type="password" required />
+        </div>
+        <div id="change-password-msg" class="modal-msg"></div>
+        <div class="modal-actions">
+          <button type="button" id="settings-cancel-btn" class="btn-cancel">取消</button>
+          <button type="submit" class="btn-confirm">確認修改</button>
+        </div>
+      </form>
     </div>
   </div>
 

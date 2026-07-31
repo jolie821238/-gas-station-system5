@@ -74,6 +74,64 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// 修改密碼（齒輪按鈕）
+// ---------------------------------------------------------------------------
+document.getElementById('settings-btn').addEventListener('click', () => {
+  document.getElementById('current-password').value = '';
+  document.getElementById('new-password').value = '';
+  document.getElementById('confirm-password').value = '';
+  document.getElementById('change-password-msg').textContent = '';
+  document.getElementById('settings-modal').style.display = 'flex';
+});
+
+document.getElementById('settings-cancel-btn').addEventListener('click', () => {
+  document.getElementById('settings-modal').style.display = 'none';
+});
+
+document.getElementById('settings-modal').addEventListener('click', (e) => {
+  if (e.target.id === 'settings-modal') {
+    document.getElementById('settings-modal').style.display = 'none';
+  }
+});
+
+document.getElementById('change-password-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const currentPassword = document.getElementById('current-password').value;
+  const newPassword = document.getElementById('new-password').value;
+  const confirmPassword = document.getElementById('confirm-password').value;
+  const msgEl = document.getElementById('change-password-msg');
+  msgEl.textContent = '';
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    msgEl.textContent = '請填寫所有欄位';
+    return;
+  }
+  if (newPassword !== confirmPassword) {
+    msgEl.textContent = '新密碼與確認新密碼不一致';
+    return;
+  }
+  if (newPassword.length < 4) {
+    msgEl.textContent = '新密碼至少需要 4 個字元';
+    return;
+  }
+
+  const res = await fetch('/api/admin/change-password', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ current_password: currentPassword, new_password: newPassword })
+  });
+  const data = await res.json();
+
+  if (!res.ok) {
+    msgEl.textContent = data.error || '修改失敗';
+    return;
+  }
+
+  document.getElementById('settings-modal').style.display = 'none';
+  showToast('密碼已修改成功', 'success');
+});
+
+// ---------------------------------------------------------------------------
 // 載入所有後台資料
 // ---------------------------------------------------------------------------
 function loadAll() {

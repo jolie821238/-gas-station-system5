@@ -196,6 +196,28 @@ app.get('/api/admin/session', (req, res) => {
   res.json({ loggedIn: !!(req.session && req.session.isAdmin) });
 });
 
+// 後台自行修改密碼（存在既有的 admin_users 資料表，不需要改資料庫結構、也不需要改環境變數）
+app.put('/api/admin/change-password', requireAdmin, asyncHandler(async (req, res) => {
+  const { current_password, new_password } = req.body;
+
+  if (!current_password || !new_password) {
+    return res.status(400).json({ error: '請輸入目前密碼與新密碼' });
+  }
+  if (String(new_password).length < 4) {
+    return res.status(400).json({ error: '新密碼至少需要 4 個字元' });
+  }
+
+  const { rows } = await pool.query('SELECT * FROM admin_users WHERE username = $1', ['admin']);
+  const admin = rows[0];
+
+  if (!admin || current_password !== admin.password) {
+    return res.status(401).json({ error: '目前密碼不正確' });
+  }
+
+  await pool.query('UPDATE admin_users SET password = $1 WHERE username = $2', [String(new_password), 'admin']);
+  res.json({ success: true });
+}));
+
 // ---------------------------------------------------------------------------
 // 🟨 後台 - 廠商管理
 // ---------------------------------------------------------------------------
