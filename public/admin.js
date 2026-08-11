@@ -227,7 +227,7 @@ document.getElementById('vendor-table-body').addEventListener('click', async (e)
   }
 
   if (action === 'delete') {
-    if (!confirm('確定要刪除此廠商嗎？（若有交易紀錄將無法刪除）')) return;
+    if (!confirm('確定要刪除此廠商嗎？此動作無法復原。（廠商過去的扣款紀錄仍會保留，但不再連結到這個廠商）')) return;
     const res = await fetch(`/api/admin/vendors/${id}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) { showToast(data.error || '刪除失敗', 'error'); return; }

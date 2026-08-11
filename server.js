@@ -57,11 +57,30 @@ async function initDb() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS transactions (
       id         SERIAL PRIMARY KEY,
-      vendor_id  INTEGER NOT NULL REFERENCES vendors(id),
+      vendor_id  INTEGER REFERENCES vendors(id) ON DELETE SET NULL,
       amount     DOUBLE PRECISION NOT NULL,
       type       TEXT NOT NULL CHECK (type IN ('deduct','admin_adjust')),
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      vendor_name_snapshot TEXT
     );
+  `);
+
+  // 針對已存在的舊資料庫做遷移：
+  // 1. 補上 vendor_name_snapshot 欄位（保存刪除廠商當下的名稱，讓歷史紀錄不會因為廠商被刪除而消失）
+  // 2. 把 vendor_id 改成可以是 NULL，並把外鍵規則改成「廠商刪除時，交易紀錄保留、只是不再連到廠商」
+  await pool.query(`ALTER TABLE transactions ADD COLUMN IF NOT EXISTS vendor_name_snapshot TEXT;`);
+  await pool.query(`
+    UPDATE transactions t
+    SET vendor_name_snapshot = v.name
+    FROM vendors v
+    WHERE t.vendor_id = v.id AND t.vendor_name_snapshot IS NULL;
+  `);
+  await pool.query(`ALTER TABLE transactions ALTER COLUMN vendor_id DROP NOT NULL;`);
+  await pool.query(`ALTER TABLE transactions DROP CONSTRAINT IF EXISTS transactions_vendor_id_fkey;`);
+  await pool.query(`
+    ALTER TABLE transactions
+    ADD CONSTRAINT transactions_vendor_id_fkey
+    FOREIGN KEY (vendor_id) REFERENCES vendors(id) ON DELETE SET NULL;
   `);
 
   await pool.query(`
@@ -147,16 +166,13 @@ app.post('/api/deduct', asyncHandler(async (req, res) => {
       await client.query('ROLLBACK');
       return res.status(404).json({ error: '廠商不存在' });
     }
-    if (amt > vendor.balance) {
-      await client.query('ROLLBACK');
-      return res.status(400).json({ error: '扣款金額不可超過餘額' });
-    }
 
+    // 這裡刻意不檢查「扣款金額是否超過餘額」，允許廠商餘額被扣成負數
     const newBalance = vendor.balance - amt;
     await client.query('UPDATE vendors SET balance = $1 WHERE id = $2', [newBalance, vendor.id]);
     await client.query(
-      'INSERT INTO transactions (vendor_id, amount, type, created_at) VALUES ($1, $2, $3, $4)',
-      [vendor.id, amt, 'deduct', nowTaipei()]
+      'INSERT INTO transactions (vendor_id, amount, type, created_at, vendor_name_snapshot) VALUES ($1, $2, $3, $4, $5)',
+      [vendor.id, amt, 'deduct', nowTaipei(), vendor.name]
     );
     await client.query('COMMIT');
 
@@ -288,10 +304,7 @@ app.delete('/api/admin/vendors/:id', requireAdmin, asyncHandler(async (req, res)
   if (!rows[0]) {
     return res.status(404).json({ error: '廠商不存在' });
   }
-  const { rows: txRows } = await pool.query('SELECT COUNT(*)::int AS c FROM transactions WHERE vendor_id = $1', [id]);
-  if (txRows[0].c > 0) {
-    return res.status(400).json({ error: '此廠商已有交易紀錄，無法刪除' });
-  }
+  // 直接刪除，即使有交易紀錄也允許刪除；歷史交易紀錄會保留（vendor_id 會變成 NULL，但名稱快照還在）
   await pool.query('DELETE FROM vendors WHERE id = $1', [id]);
   res.json({ success: true });
 }));
@@ -317,8 +330,8 @@ app.post('/api/admin/vendors/:id/adjust', requireAdmin, asyncHandler(async (req,
     const newBalance = vendor.balance + amt;
     await client.query('UPDATE vendors SET balance = $1 WHERE id = $2', [newBalance, id]);
     await client.query(
-      'INSERT INTO transactions (vendor_id, amount, type, created_at) VALUES ($1, $2, $3, $4)',
-      [id, amt, 'admin_adjust', nowTaipei()]
+      'INSERT INTO transactions (vendor_id, amount, type, created_at, vendor_name_snapshot) VALUES ($1, $2, $3, $4, $5)',
+      [id, amt, 'admin_adjust', nowTaipei(), vendor.name]
     );
     await client.query('COMMIT');
     res.json({ success: true, vendor: { id: vendor.id, name: vendor.name, balance: newBalance } });
@@ -335,9 +348,9 @@ app.post('/api/admin/vendors/:id/adjust', requireAdmin, asyncHandler(async (req,
 // ---------------------------------------------------------------------------
 app.get('/api/admin/transactions', requireAdmin, asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`
-    SELECT t.id, v.name AS vendor_name, t.amount, t.type, t.created_at
+    SELECT t.id, COALESCE(v.name, t.vendor_name_snapshot, '(已刪除廠商)') AS vendor_name, t.amount, t.type, t.created_at
     FROM transactions t
-    JOIN vendors v ON v.id = t.vendor_id
+    LEFT JOIN vendors v ON v.id = t.vendor_id
     ORDER BY t.id DESC
   `);
   res.json(rows);
@@ -348,12 +361,14 @@ app.get('/api/admin/transactions', requireAdmin, asyncHandler(async (req, res) =
 // ---------------------------------------------------------------------------
 app.get('/api/admin/daily-stats', requireAdmin, asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`
-    SELECT substr(t.created_at, 1, 10) AS date, v.name AS vendor_name, SUM(t.amount) AS total
+    SELECT substr(t.created_at, 1, 10) AS date,
+           COALESCE(v.name, t.vendor_name_snapshot, '(已刪除廠商)') AS vendor_name,
+           SUM(t.amount) AS total
     FROM transactions t
-    JOIN vendors v ON v.id = t.vendor_id
+    LEFT JOIN vendors v ON v.id = t.vendor_id
     WHERE t.type = 'deduct'
-    GROUP BY date, v.name
-    ORDER BY date DESC, v.name ASC
+    GROUP BY date, COALESCE(v.name, t.vendor_name_snapshot, '(已刪除廠商)')
+    ORDER BY date DESC, vendor_name ASC
   `);
   res.json(rows);
 }));
@@ -363,11 +378,11 @@ app.get('/api/admin/daily-stats', requireAdmin, asyncHandler(async (req, res) =>
 // ---------------------------------------------------------------------------
 app.get('/api/admin/export/transactions', requireAdmin, asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`
-    SELECT v.name AS "廠商名稱", t.amount AS "金額",
+    SELECT COALESCE(v.name, t.vendor_name_snapshot, '(已刪除廠商)') AS "廠商名稱", t.amount AS "金額",
            CASE t.type WHEN 'deduct' THEN '扣款' ELSE '後台調整' END AS "類型",
            t.created_at AS "時間"
     FROM transactions t
-    JOIN vendors v ON v.id = t.vendor_id
+    LEFT JOIN vendors v ON v.id = t.vendor_id
     ORDER BY t.id DESC
   `);
 
@@ -383,12 +398,14 @@ app.get('/api/admin/export/transactions', requireAdmin, asyncHandler(async (req,
 
 app.get('/api/admin/export/daily-stats', requireAdmin, asyncHandler(async (req, res) => {
   const { rows } = await pool.query(`
-    SELECT substr(t.created_at, 1, 10) AS "日期", v.name AS "廠商名稱", SUM(t.amount) AS "扣款總額"
+    SELECT substr(t.created_at, 1, 10) AS "日期",
+           COALESCE(v.name, t.vendor_name_snapshot, '(已刪除廠商)') AS "廠商名稱",
+           SUM(t.amount) AS "扣款總額"
     FROM transactions t
-    JOIN vendors v ON v.id = t.vendor_id
+    LEFT JOIN vendors v ON v.id = t.vendor_id
     WHERE t.type = 'deduct'
-    GROUP BY "日期", v.name
-    ORDER BY "日期" DESC, v.name ASC
+    GROUP BY "日期", COALESCE(v.name, t.vendor_name_snapshot, '(已刪除廠商)')
+    ORDER BY "日期" DESC, "廠商名稱" ASC
   `);
 
   const worksheet = XLSX.utils.json_to_sheet(rows);
