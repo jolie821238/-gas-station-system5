@@ -138,6 +138,60 @@ function asyncHandler(fn) {
 }
 
 // ---------------------------------------------------------------------------
+// 🛠️ 維修模式
+// 把環境變數 MAINTENANCE_MODE 設成 "true" 就會開啟，整個網站（前台、後台）
+// 都會改顯示「維修中」頁面；設成 "false" 或刪除這個環境變數就會恢復正常。
+// 這個判斷放在所有路由之前，開啟時會直接攔截所有請求。
+// ---------------------------------------------------------------------------
+const MAINTENANCE_MODE = process.env.MAINTENANCE_MODE === 'true';
+
+const maintenanceHtml = `<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>維修中 - 加油站儲值管理系統</title>
+<style>
+  body {
+    margin: 0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, "PingFang TC", "Microsoft JhengHei", "Segoe UI", sans-serif;
+    background: linear-gradient(160deg, #10141c 0%, #1b2432 45%, #0f1a1a 100%);
+    color: #f2f2f2;
+    text-align: center;
+    padding: 20px;
+  }
+  .box {
+    background: rgba(255,255,255,0.06);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 16px;
+    padding: 40px 32px;
+    max-width: 400px;
+  }
+  .icon { font-size: 2.5rem; margin-bottom: 12px; }
+  h1 { margin: 0 0 10px; font-size: 1.3rem; color: #ffce54; }
+  p { color: #b8bcc4; font-size: 0.95rem; line-height: 1.6; margin: 0; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <div class="icon">🛠️</div>
+    <h1>系統維修中</h1>
+    <p>加油站儲值管理系統目前暫停服務，進行維護作業，請稍後再試。<br />造成不便，敬請見諒。</p>
+  </div>
+</body>
+</html>`;
+
+if (MAINTENANCE_MODE) {
+  app.use((req, res) => {
+    res.status(503).send(maintenanceHtml);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // 🟩 前台 API（無需登入）
 // ---------------------------------------------------------------------------
 
